@@ -51,6 +51,18 @@ data Dot = Node NodeId [Attribute]
          | DotEmpty
   deriving (Show, Eq)
 
+instance Semigroup Dot where
+  DotEmpty <> d = d
+  d <> DotEmpty = d
+  d <> (DotSeq d1 d2) = DotSeq (d <> d1) d2
+  d1 <> d2 = DotSeq d1 d2
+
+instance Monoid Dot where
+  mempty = DotEmpty
+
+skipMany1 :: Parsing f => f a -> f ()
+skipMany1 p = p *> skipMany p
+
 insensitiveString :: String -> Parser String
 insensitiveString = traverse ci where ci c = char (toLower c) <|> char (toUpper c)
 
@@ -74,13 +86,16 @@ skipComment :: Parser ()
 skipComment = try multilineComment <|> singlelineComment
 
 whiteSpaceOrComment :: Parser ()
-whiteSpaceOrComment = try multilineComment <|> whiteSpace
+whiteSpaceOrComment = skipMany (skipComment <|> skipMany1 space)
 
 parseEmptySpace :: Parser ()
 parseEmptySpace = choice [skipComment, skipMany newline, skipMany space]
 
 parseInlineSpace :: Parser ()
 parseInlineSpace = choice [multilineComment, skipMany newline, skipMany space]
+
+tokenize :: Parser a -> Parser a
+tokenize p = p <* whiteSpaceOrComment
 
 parseKvp :: String -> Parser b -> Parser b
 parseKvp k parseV = string k 
@@ -91,7 +106,7 @@ parseKvp k parseV = string k
 
 -- graph type
 parseGraphType :: Parser GraphType
-parseGraphType = (DirectedGraph <$ insensitiveString "digraph") 
+parseGraphType = tokenize $ (DirectedGraph <$ insensitiveString "digraph") 
              <|> (UndirectedGraph <$ insensitiveString "graph")
 
 -- rank dir
@@ -102,11 +117,37 @@ parseRankDirVal =
          , TB <$ string "TB" 
          , BT <$ string "BT" ]
 
-parseRankDir :: Parser RankdirType
-parseRankDir = parseKvp "rankdir" (optionalQuotes parseRankDirVal)
+parseRankdir :: Parser RankdirType
+parseRankdir = tokenize $ symbol "rankdir" >> symbol "=" >> optionalQuotes parseRankDirVal
 
 parseValue :: Parser String
-parseValue = parseQuoted <|> some alphaNum
+parseValue = tokenize $ try parseQuoted <|> some alphaNum
 
 parseLabel :: Parser Dot
-parseLabel = Label . pack <$> parseKvp "label" parseValue
+parseLabel = tokenize $ Label . pack <$> (symbol "label" >> symbol "=" >> parseValue)
+
+parseNodeId :: Parser NodeId
+parseNodeId = tokenize $ (UserId . pack <$> parseValue) <|> (Nameless . fromInteger <$> decimal)            
+
+parseNode :: Parser Dot
+parseNode = tokenize $ Node <$> parseNodeId <*> pure [] -- todo: parse attributes
+
+parseEdge :: Parser String -> Parser Dot
+parseEdge connection = do
+  start <- parseNodeId
+  _ <- tokenize connection
+  stop <- parseNodeId
+  return $ Edge start stop []
+
+conStyle :: GraphType -> Parser String
+conStyle g = if g == DirectedGraph then symbol "->" else symbol "--"
+
+parseDot :: Parser String -> Parser Dot
+parseDot con = foldl1 (<>) <$> many (parseEdge con <|> parseLabel)
+
+parseGraph :: Parser DotGraph 
+parseGraph = do
+  graphType <- parseGraphType  
+  graphName <- pack <$> parseValue
+  body <- between (char '{') (char '}') (parseDot $ conStyle graphType)
+  return $ Graph graphType graphName body
