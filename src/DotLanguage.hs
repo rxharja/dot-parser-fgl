@@ -1,3 +1,4 @@
+{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ExtendedDefaultRules #-}
 
@@ -7,6 +8,7 @@ import Data.Text (Text, pack)
 import Text.Trifecta
 import Data.Char
 import Control.Applicative ((<|>))
+import Text.RawString.QQ (r)
 
 default (Text)
 
@@ -98,56 +100,100 @@ tokenize :: Parser a -> Parser a
 tokenize p = p <* whiteSpaceOrComment
 
 parseKvp :: String -> Parser b -> Parser b
-parseKvp k parseV = string k 
-                 >> whiteSpaceOrComment 
-                 >> char '=' 
-                 >> whiteSpaceOrComment 
+parseKvp k parseV = string k
+                 >> whiteSpaceOrComment
+                 >> char '='
+                 >> whiteSpaceOrComment
                  >> parseV
 
 -- graph type
 parseGraphType :: Parser GraphType
-parseGraphType = tokenize $ (DirectedGraph <$ insensitiveString "digraph") 
+parseGraphType = tokenize $ (DirectedGraph <$ insensitiveString "digraph")
              <|> (UndirectedGraph <$ insensitiveString "graph")
 
 -- rank dir
 parseRankDirVal :: Parser RankdirType
-parseRankDirVal = 
-  choice [ LR <$ string "LR" 
-         , RL <$ string "RL" 
-         , TB <$ string "TB" 
+parseRankDirVal =
+  choice [ LR <$ string "LR"
+         , RL <$ string "RL"
+         , TB <$ string "TB"
          , BT <$ string "BT" ]
 
-parseRankdir :: Parser RankdirType
-parseRankdir = tokenize $ symbol "rankdir" >> symbol "=" >> optionalQuotes parseRankDirVal
+parseRankdir :: Parser Dot
+parseRankdir = Rankdir <$> tokenize (symbol "rankdir" >> symbol "=" >> optionalQuotes parseRankDirVal)
 
 parseValue :: Parser String
 parseValue = tokenize $ try parseQuoted <|> some alphaNum
+
+terminator :: Parser Dot -> Parser Dot
+terminator p = p <* (char '\n' <|> char ';')
 
 parseLabel :: Parser Dot
 parseLabel = tokenize $ Label . pack <$> (symbol "label" >> symbol "=" >> parseValue)
 
 parseNodeId :: Parser NodeId
-parseNodeId = tokenize $ (UserId . pack <$> parseValue) <|> (Nameless . fromInteger <$> decimal)            
+parseNodeId = tokenize $ (UserId . pack <$> parseValue) <|> (Nameless . fromInteger <$> decimal)
 
 parseNode :: Parser Dot
-parseNode = tokenize $ Node <$> parseNodeId <*> pure [] -- todo: parse attributes
+parseNode = tokenize $ Node <$> parseNodeId <*> pure []
 
-parseEdge :: Parser String -> Parser Dot
-parseEdge connection = do
+-- x -> y
+parseEdgeSingle :: Parser String -> Parser Dot
+parseEdgeSingle connection = Edge
+               <$> parseNodeId
+               <* tokenize connection
+               <*> parseNodeId
+               <*> pure []
+
+-- x -> y -> z
+parseEdgeChain :: Parser String -> Parser Dot
+parseEdgeChain connection = do
+  nodes <- parseNodeId `sepBy1` tokenize connection
+  let edges = zipWith (\a b -> Edge a b []) nodes (tail nodes)
+  return $ foldl1 (<>) edges
+
+-- x -> {y,z}
+parseEdgeMulti :: Parser String -> Parser Dot
+parseEdgeMulti connection = do
   start <- parseNodeId
   _ <- tokenize connection
-  stop <- parseNodeId
-  return $ Edge start stop []
+  ids <- braces (parseNodeId `sepBy1` tokenize (char ','))
+  return $ foldl1 (<>) $ (\x -> Edge start x []) <$> ids
 
-conStyle :: GraphType -> Parser String
-conStyle g = if g == DirectedGraph then symbol "->" else symbol "--"
+parseEdge :: Parser String -> Parser Dot
+parseEdge connection = choice 
+  [ try (parseEdgeMulti connection)
+  , try (parseEdgeChain connection)
+  , try (parseEdgeSingle connection)
+  ] 
 
 parseDot :: Parser String -> Parser Dot
-parseDot con = foldl1 (<>) <$> many (parseEdge con <|> parseLabel)
+parseDot con =
+  let captureDot p = whiteSpaceOrComment >> p <* optional (char ';')
+      dotParsers = choice $ captureDot <$> 
+                  [ try parseLabel
+                  , try parseRankdir
+                  , parseEdge con
+                  ]
+   in foldl1 (<>) <$> many dotParsers
 
-parseGraph :: Parser DotGraph 
+conStyle :: GraphType -> Parser String
+conStyle g = if g == DirectedGraph then string "->" else string "--"
+
+parseGraph :: Parser DotGraph
 parseGraph = do
-  graphType <- parseGraphType  
+  whiteSpaceOrComment
+  graphType <- parseGraphType
   graphName <- pack <$> parseValue
-  body <- between (char '{') (char '}') (parseDot $ conStyle graphType)
+  body <- between (tokenize $ char '{') (tokenize $ char '}') (parseDot $ conStyle graphType)
   return $ Graph graphType graphName body
+
+input :: String
+input = [r| 
+digraph "test" {
+  label = "test label"
+  rankdir = BT // flip this bad boy around
+  a -> {b,c,d}
+  x->y->z
+}
+|]

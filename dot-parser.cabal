@@ -72,6 +72,7 @@ library
                     , fgl
                     , text
                     , trifecta
+                    , raw-strings-qq
 
     -- Directories containing source files.
     hs-source-dirs:   src
