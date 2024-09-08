@@ -72,7 +72,6 @@ library
                     , fgl
                     , text
                     , trifecta
-                    , raw-strings-qq
 
     -- Directories containing source files.
     hs-source-dirs:   src
@@ -128,6 +127,7 @@ test-suite dot-parser-test
     main-is:          Main.hs
 
     -- Test dependencies.
-    build-depends:
-        base ^>=4.17.2.1,
-        dot-parser
+    build-depends:    base ^>=4.17.2.1
+                    , dot-parser
+                    , raw-strings-qq
+                    , hspec
