@@ -179,6 +179,15 @@ parseEdge connection = choice
 parseRankSame :: Parser Dot
 parseRankSame = undefined -- todo
 
+parseDecType :: Parser DecType
+parseDecType =tokenize 
+              (DecNode <$ insensitiveString "node" 
+           <|> DecEdge <$ insensitiveString "edge"
+           <|> DecGraph <$ insensitiveString "graph")
+
+parseDec :: Parser Dot
+parseDec = Declaration <$> parseDecType <*> parseAttributes
+
 parseAttribute :: Parser Attribute
 parseAttribute = 
   let couple x y = (pack x, pack y)
@@ -188,8 +197,11 @@ parseAttributes :: Parser [Attribute]
 parseAttributes = tokenize $ 
   brackets (parseAttribute `sepBy` tokenize (char ',' <|> char ';')) <* optional (char ';')
 
-parseSubGraph :: Parser Dot
-parseSubGraph = undefined -- todo
+parseSubGraph :: Parser String -> Parser Dot
+parseSubGraph con = Subgraph 
+                 <$ tokenize (insensitiveString "subgraph")
+                 <*> fmap pack parseValue 
+                 <*> braces (parseDot con)
 
 parseDot :: Parser String -> Parser Dot
 parseDot con =
@@ -198,6 +210,8 @@ parseDot con =
                   [ try parseLabel
                   , try parseRankdir
                   , try $ parseEdge con  
+                  , try $ parseSubGraph con  
+                  , try parseDec
                   , parseNode ]
    in foldl1 (<>) <$> many dotParsers
 
@@ -248,6 +262,13 @@ inputOnline :: String
 inputOnline = [r|
 
 digraph G {
+
+  subgraph cluster_1 {
+    node [style=filled,color=white];
+    b0 -> b1 -> b2 -> b3;
+    label = "process #2";
+  }
+
   start -> a0;
   start -> b0;
   a1 -> b3;
