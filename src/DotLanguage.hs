@@ -117,8 +117,11 @@ parseRankDirVal =
 parseRankdir :: Parser Dot
 parseRankdir = Rankdir <$> tokenize (symbol "rankdir" >> symbol "=" >> optionalQuotes parseRankDirVal)
 
+parseSpecial :: Parser Char
+parseSpecial = try (char '.') <|> try (char '_') <|> alphaNum
+
 parseValue :: Parser String
-parseValue = tokenize $ try parseQuoted <|> some alphaNum
+parseValue = tokenize $ try parseQuoted <|> some parseSpecial
 
 terminator :: Parser Dot -> Parser Dot
 terminator p = p <* (char '\n' <|> char ';')
@@ -130,7 +133,12 @@ parseNodeId :: Parser NodeId
 parseNodeId = tokenize $ (UserId . pack <$> parseValue) <|> (Nameless . fromInteger <$> decimal)
 
 parseNode :: Parser Dot
-parseNode = tokenize $ Node <$> parseNodeId <*> pure []
+parseNode = tokenize $ 
+  Node <$> parseNodeId <*> fmap def (optional parseAttributes)
+
+def :: Maybe [a] -> [a]
+def Nothing = [] 
+def (Just n) = n
 
 -- x -> y
 parseEdgeSingle :: Parser String -> Parser Dot
@@ -138,16 +146,17 @@ parseEdgeSingle connection = Edge
                <$> parseNodeId
                <* tokenize connection
                <*> parseNodeId
-               <*> pure []
+               <*> tokenize (fmap def (optional parseAttributes))
 
 -- x -> y -> z
 parseEdgeChain :: Parser String -> Parser Dot
 parseEdgeChain connection = do
   nodes <- parseNodeId `sepBy1` tokenize connection
+  attributes <- def <$> optional parseAttributes
 
   if length nodes < 2 
   then fail "There must be at least two nodes for a connection" 
-  else return $ foldl1 (<>) $ zipWith (\a b -> Edge a b []) nodes (tail nodes)
+  else return $ foldl1 (<>) $ zipWith (\a b -> Edge a b attributes) nodes (tail nodes)
 
 -- x -> {y,z}
 parseEdgeMulti :: Parser String -> Parser Dot
@@ -155,10 +164,11 @@ parseEdgeMulti connection = do
   start <- parseNodeId
   _ <- tokenize connection
   ids <- braces (parseNodeId `sepBy` tokenize (char ','))
+  attributes <- def <$> optional parseAttributes
 
   if null ids
   then fail "There must be at least one other node in { }" 
-  else return $ foldl1 (<>) $ (\x -> Edge start x []) <$> ids
+  else return $ foldl1 (<>) $ (\x -> Edge start x attributes) <$> ids
 
 parseEdge :: Parser String -> Parser Dot
 parseEdge connection = choice 
@@ -169,8 +179,14 @@ parseEdge connection = choice
 parseRankSame :: Parser Dot
 parseRankSame = undefined -- todo
 
+parseAttribute :: Parser Attribute
+parseAttribute = 
+  let couple x y = (pack x, pack y)
+   in couple <$> tokenize (many alphaNum) <* symbol "=" <*> tokenize parseValue  
+
 parseAttributes :: Parser [Attribute]
-parseAttributes = undefined -- todo
+parseAttributes = tokenize $ 
+  brackets (parseAttribute `sepBy` tokenize (char ',' <|> char ';')) <* optional (char ';')
 
 parseSubGraph :: Parser Dot
 parseSubGraph = undefined -- todo
@@ -235,13 +251,13 @@ digraph G {
   start -> a0;
   start -> b0;
   a1 -> b3;
-  b2 -> a3;
+  b2 -> a3 [color=red, width=1.4];
   a3 -> a0;
   a3 -> end;
   b3 -> end;
 
-  start;
-  end;
+  start [shape=Mdiamond];
+  end [shape=Msquare];
 }
 
 |]
