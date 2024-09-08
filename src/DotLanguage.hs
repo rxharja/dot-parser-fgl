@@ -37,6 +37,7 @@ data RankdirType = LR
 data Dot = Node NodeId [Attribute]
          | Edge NodeId NodeId [Attribute]
          | Declaration DecType [Attribute]
+         | Attribute Attribute
          | Ranksame Dot
          | Subgraph Text Dot
          | Label Text
@@ -60,9 +61,6 @@ skipMany1 p = p *> skipMany p
 insensitiveString :: String -> Parser String
 insensitiveString = traverse ci where ci c = char (toLower c) <|> char (toUpper c)
 
-betweenBrackets :: Parser a -> Parser a
-betweenBrackets = between (char '[') (char ']')
-
 optionalQuotes :: Parser a -> Parser a
 optionalQuotes p = between (char '\"') (char '\"') p <|> p
 
@@ -71,13 +69,6 @@ parseQuoted = char '\"' >> manyTill anyChar (char '\"')
 
 tokenize :: Parser a -> Parser a
 tokenize p = p <* whiteSpaceOrComment
-
-parseKvp :: String -> Parser b -> Parser b
-parseKvp k parseV = string k
-                 >> whiteSpaceOrComment
-                 >> char '='
-                 >> whiteSpaceOrComment
-                 >> parseV
 
 -- comments
 singlelineComment :: Parser ()
@@ -183,6 +174,11 @@ parseDecType = tokenize (DecNode <$ insensitiveString "node"
 parseDec :: Parser Dot
 parseDec = Declaration <$> parseDecType <*> parseAttributes
 
+parseDotAttr :: Parser Dot
+parseDotAttr = 
+  let attr = (\x y -> (pack x, pack y)) <$> tokenize (some parseSpecial) <* tokenize (symbol "=") <*> parseValue
+   in Attribute <$> attr 
+
 parseAttribute :: Parser Attribute
 parseAttribute = 
   let couple x y = (pack x, pack y)
@@ -203,12 +199,13 @@ parseDot :: Parser String -> Parser Dot
 parseDot con =
   let captureDot p = whiteSpaceOrComment >> p <* optional (tokenize $ char ';')
       dotParsers = choice $ captureDot <$> 
-                  [ try parseLabel
+                  [ try $ parseSubGraph con  
+                  , try parseLabel
                   , try parseRankdir
                   , try $ parseEdge con  
-                  , try $ parseSubGraph con  
                   , try $ parseRanksame con  
                   , try parseDec
+                  , try parseDotAttr
                   , parseNode ]
    in mconcat <$> many dotParsers
 
@@ -219,8 +216,10 @@ conStyle   DirectedGraph = string "->"
 parseGraph :: Parser DotGraph
 parseGraph = do
   whiteSpaceOrComment
-  graphType <- parseGraphType
-  graphName <- pack <$> parseValue
-  body <- braces $ parseDot (conStyle graphType)
+  graphType <- tokenize parseGraphType
+  graphName <- pack <$> tokenize parseValue
+  body <- tokenize (braces $ parseDot (conStyle graphType))
   return $ Graph graphType graphName body
 
+parseGraphs :: Parser [DotGraph]
+parseGraphs = tokenize (some parseGraph)

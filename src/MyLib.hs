@@ -1,7 +1,6 @@
-module MyLib where
-
-
 {-# LANGUAGE OverloadedStrings #-}
+
+module MyLib where
 
 import Data.Graph.Inductive.Graph
 import Data.Graph.Inductive.PatriciaTree (Gr)
