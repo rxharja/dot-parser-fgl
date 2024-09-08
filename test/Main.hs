@@ -1,8 +1,9 @@
 {-# LANGUAGE QuasiQuotes #-}
-
 module Main (main) where
 
 import Text.RawString.QQ (r)
+import DotLanguage (parseGraph)
+import Text.Trifecta
 
 input :: String
 input = [r| 
@@ -35,13 +36,19 @@ GRAPH "not directed" {
 
 |]
 
-inputOnline :: String
-inputOnline = [r|
+defaultInput :: String
+defaultInput = [r|
 
 digraph G {
 
-  subgraph cluster_1 {
+  subgraph cluster_0 {
     node [style=filled,color=white];
+    a0 -> a1 -> a2 -> a3;
+    label = "process #1";
+  }
+
+  subgraph cluster_1 {
+    node [style=filled];
     b0 -> b1 -> b2 -> b3;
     label = "process #2";
   }
@@ -54,6 +61,7 @@ digraph G {
   a3 -> end;
   b3 -> end;
 
+  {rank = same; start; end}
   start [shape=Mdiamond];
   end [shape=Msquare];
 }
@@ -61,4 +69,14 @@ digraph G {
 |]
 
 main :: IO ()
-main = putStrLn "Test suite not yet implemented."
+main = do
+  let parse = parseString parseGraph mempty 
+
+  putStrLn "\n"
+  print $ parse input
+
+  putStrLn "\n"
+  print $ parse input'
+
+  putStrLn "\n"
+  print $ parse defaultInput

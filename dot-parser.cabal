@@ -130,4 +130,5 @@ test-suite dot-parser-test
     build-depends:    base ^>=4.17.2.1
                     , dot-parser
                     , raw-strings-qq
+                    , trifecta
                     , hspec

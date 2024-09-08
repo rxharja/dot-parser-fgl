@@ -39,7 +39,6 @@ data Dot = Node NodeId [Attribute]
          | Declaration DecType [Attribute]
          | Ranksame Dot
          | Subgraph Text Dot
-         | RawDot Text
          | Label Text
          | Rankdir RankdirType
          | DotSeq Dot Dot
@@ -54,6 +53,7 @@ instance Semigroup Dot where
 
 instance Monoid Dot where mempty = DotEmpty
 
+-- helpful combinators
 skipMany1 :: Parsing f => f a -> f ()
 skipMany1 p = p *> skipMany p
 
@@ -69,6 +69,16 @@ optionalQuotes p = between (char '\"') (char '\"') p <|> p
 parseQuoted :: Parser String
 parseQuoted = char '\"' >> manyTill anyChar (char '\"')
 
+tokenize :: Parser a -> Parser a
+tokenize p = p <* whiteSpaceOrComment
+
+parseKvp :: String -> Parser b -> Parser b
+parseKvp k parseV = string k
+                 >> whiteSpaceOrComment
+                 >> char '='
+                 >> whiteSpaceOrComment
+                 >> parseV
+
 -- comments
 singlelineComment :: Parser ()
 singlelineComment = string "//" >> anyChar `manyTill` newline >> return ()
@@ -82,26 +92,10 @@ skipComment = try multilineComment <|> singlelineComment
 whiteSpaceOrComment :: Parser ()
 whiteSpaceOrComment = skipMany (skipComment <|> skipMany1 space)
 
-parseEmptySpace :: Parser ()
-parseEmptySpace = choice [skipComment, skipMany newline, skipMany space]
-
-parseInlineSpace :: Parser ()
-parseInlineSpace = choice [multilineComment, skipMany newline, skipMany space]
-
-tokenize :: Parser a -> Parser a
-tokenize p = p <* whiteSpaceOrComment
-
-parseKvp :: String -> Parser b -> Parser b
-parseKvp k parseV = string k
-                 >> whiteSpaceOrComment
-                 >> char '='
-                 >> whiteSpaceOrComment
-                 >> parseV
-
 -- graph type
 parseGraphType :: Parser GraphType
-parseGraphType = tokenize $ (DirectedGraph <$ insensitiveString "digraph")
-             <|> (UndirectedGraph <$ insensitiveString "graph")
+parseGraphType = tokenize $ 
+   (DirectedGraph <$ insensitiveString "digraph") <|> (UndirectedGraph <$ insensitiveString "graph")
 
 -- rank dir
 parseRankDirVal :: Parser RankdirType
@@ -153,7 +147,7 @@ parseEdgeChain connection = do
 
   if length nodes < 2 
   then fail "There must be at least two nodes for a connection" 
-  else return $ foldl1 (<>) $ zipWith (\a b -> Edge a b attributes) nodes (tail nodes)
+  else return $ mconcat $ zipWith (\a b -> Edge a b attributes) nodes (tail nodes)
 
 -- x -> {y,z}
 parseEdgeMulti :: Parser String -> Parser Dot
@@ -165,7 +159,7 @@ parseEdgeMulti connection = do
 
   if null ids
   then fail "There must be at least one other node in { }" 
-  else return $ foldl1 (<>) $ (\x -> Edge start x attributes) <$> ids
+  else return $ mconcat $ (\x -> Edge start x attributes) <$> ids
 
 parseEdge :: Parser String -> Parser Dot
 parseEdge connection = choice 
@@ -173,12 +167,16 @@ parseEdge connection = choice
   , try (parseEdgeChain connection)
   , parseEdgeSingle connection ] 
 
-parseRankSame :: Parser Dot
-parseRankSame = undefined -- todo
+parseRanksame :: Parser String -> Parser Dot
+parseRanksame con = 
+  let parseRank = tokenize (insensitiveString "rank") 
+               >> tokenize (symbol "=") 
+               >> tokenize (insensitiveString "same")
+               >> tokenize (optional (char ';'))
+   in Ranksame <$> braces (parseRank >> parseDot con)
 
 parseDecType :: Parser DecType
-parseDecType =tokenize 
-              (DecNode <$ insensitiveString "node" 
+parseDecType = tokenize (DecNode <$ insensitiveString "node" 
            <|> DecEdge <$ insensitiveString "edge"
            <|> DecGraph <$ insensitiveString "graph")
 
@@ -191,8 +189,9 @@ parseAttribute =
    in couple <$> tokenize (many alphaNum) <* symbol "=" <*> tokenize parseValue  
 
 parseAttributes :: Parser [Attribute]
-parseAttributes = tokenize $ 
-  brackets (parseAttribute `sepBy` tokenize (char ',' <|> char ';')) <* optional (char ';')
+parseAttributes = tokenize $ brackets attributes <* optional (char ';')
+  where 
+    attributes = parseAttribute `sepBy` tokenize (char ',' <|> char ';')
 
 parseSubGraph :: Parser String -> Parser Dot
 parseSubGraph con = Subgraph 
@@ -208,9 +207,10 @@ parseDot con =
                   , try parseRankdir
                   , try $ parseEdge con  
                   , try $ parseSubGraph con  
+                  , try $ parseRanksame con  
                   , try parseDec
                   , parseNode ]
-   in foldl1 (<>) <$> many dotParsers
+   in mconcat <$> many dotParsers
 
 conStyle :: GraphType -> Parser String
 conStyle UndirectedGraph = string "--"
