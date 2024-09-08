@@ -168,12 +168,12 @@ parseEdge connection = choice
   , parseEdgeSingle connection ] 
 
 parseRanksame :: Parser String -> Parser Dot
-parseRanksame con = 
-  let parseRank = tokenize (insensitiveString "rank") 
-               >> tokenize (symbol "=") 
-               >> tokenize (insensitiveString "same")
-               >> tokenize (optional (char ';'))
-   in Ranksame <$> braces (parseRank >> parseDot con)
+parseRanksame con = Ranksame <$> braces (parseRank >> parseDot con)
+  where 
+    parseRank = tokenize (insensitiveString "rank") 
+             >> tokenize (symbol "=") 
+             >> tokenize (insensitiveString "same")
+             >> tokenize (optional (char ';'))
 
 parseDecType :: Parser DecType
 parseDecType = tokenize (DecNode <$ insensitiveString "node" 
