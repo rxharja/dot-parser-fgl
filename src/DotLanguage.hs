@@ -166,6 +166,9 @@ parseEdge connection = choice
   , try (parseEdgeChain connection)
   , parseEdgeSingle connection ] 
 
+parseRankSame :: Parser Dot
+parseRankSame = undefined -- todo
+
 parseAttributes :: Parser [Attribute]
 parseAttributes = undefined -- todo
 
