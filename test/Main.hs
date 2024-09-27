@@ -17,6 +17,7 @@ complexInput = [r|
   Cluster 0 groups nodes a0 -> a3
   and Cluster 1 groups nodes b0 -> b3.
 */
+
 digraph G {
 
   /* Cluster 0 groups nodes a0 -> a3 */
@@ -81,12 +82,10 @@ result =
     (Edge (UserId "a3") (UserId "a0") [])) 
     (Edge (UserId "a3") (UserId "end") [])) 
     (Edge (UserId "b3") (UserId "end") [])) 
+
     (Node (UserId "start") [("shape","Mdiamond")])) 
     (Node (UserId "end") [("shape","Msquare")])) 
-
-    (Ranksame (DotSeq 
-      (Node (UserId "q1") []) 
-      (Node (UserId "q2") []))))
+    (Ranksame (DotSeq (Node (UserId "q1") []) (Node (UserId "q2") []))))
 
 main :: IO ()
 main = hspec $ do

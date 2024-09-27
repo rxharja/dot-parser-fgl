@@ -1,40 +1,13 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module MyLib where
+module DotFgl where
 
 import Data.Graph.Inductive.Graph
 import Data.Graph.Inductive.PatriciaTree (Gr)
 import Data.Graph.Inductive.Query.DFS (dfs)
-
--- infixr :&:
-
--- type Node = Int
-
--- type Adj b = [(b, Node)]
-
--- type Context a b = (Adj b, Node, a, Adj b)
-
--- data Graph a b = Empty | Context a b :&: Graph a b
-
--- newGraph :: Graph Char String
--- newGraph = 
---   ([("left", 2), ("up", 3)], 1, 'a', [("right", 2)]) :&:
---                         ([], 2, 'b', [("down", 3)])  :&:
---                         ([], 3, 'c', [])             :&: Empty
-
--- newGraph' :: Graph Char String
--- newGraph' = 
---   ([("down", 2)],  3, 'c', [("up", 1)])   :&:
---   ([("right", 1)], 2, 'b', [("left", 1)]) :&:
---               ([], 1, 'a', [])            :&: Empty
-
--- isEmpty :: Graph a b -> Bool
--- isEmpty Empty = True
--- isEmpty _     = False
-
--- gmap :: (Context a b -> Context c d) -> Graph a b -> Graph c d
--- gmap _ Empty     = Empty
--- gmap f (c :&: g) = f c :&: gmap f g
+import DotLanguage 
+import qualified Data.Map as M
+import Data.Text
 
 -- Define the nodes and edges
 nodes' :: [(Node, String)]
@@ -42,6 +15,19 @@ nodes' = [(1, "A"), (2, "B"), (3, "C"), (4, "D")]
 
 edges' :: [(Node, Node, String)]
 edges' = [(1, 2, "A to B"), (2, 3, "B to C"), (3, 4, "C to D"), (4, 1, "D to A")]
+
+fromDotGraph :: DotGraph -> Gr Text Text
+fromDotGraph (Graph _ _ dot) = mkGraph nodes edges
+  where
+    (nodes, edges) = collectNodesAndEdges dot M.empty []
+
+collectNodesAndEdges :: Dot -> M.Map NodeId Text 
+                     -> [(Text, Text, [Attribute])] 
+                     -> ([(Text, NodeId)], [(Text, Text, [Attribute])])
+collectNodesAndEdges DotEmpty nodeMap edges = ([], edges)
+
+fromDot :: DotGraph -> Gr Text Text
+fromDot = undefined
 
 -- Create a graph
 graph :: Gr String String

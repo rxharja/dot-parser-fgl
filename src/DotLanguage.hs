@@ -140,7 +140,7 @@ parseEdgeChain connection = do
   then fail "There must be at least two nodes for a connection" 
   else return $ mconcat $ zipWith (\a b -> Edge a b attributes) nodes (tail nodes)
 
--- x -> {y,z}
+-- {x,y} -> z
 parseEdgeMulti :: Parser String -> Parser Dot
 parseEdgeMulti connection = do
   start <- parseNodeId
@@ -151,10 +151,23 @@ parseEdgeMulti connection = do
   if null ids
   then fail "There must be at least one other node in { }" 
   else return $ mconcat $ (\x -> Edge start x attributes) <$> ids
+--
+-- x -> {y,z}
+parseMultiEdge :: Parser String -> Parser Dot
+parseMultiEdge connection = do
+  ids <- braces (parseNodeId `sepBy` tokenize (char ','))
+  _ <- tokenize connection
+  start <- parseNodeId
+  attributes <- def <$> optional parseAttributes
+
+  if null ids
+  then fail "There must be at least one other node in { }" 
+  else return $ mconcat $ (\x -> Edge x start attributes) <$> ids
 
 parseEdge :: Parser String -> Parser Dot
 parseEdge connection = choice 
   [ try (parseEdgeMulti connection)
+  , try (parseMultiEdge connection)
   , try (parseEdgeChain connection)
   , parseEdgeSingle connection ] 
 

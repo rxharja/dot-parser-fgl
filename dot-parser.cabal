@@ -58,7 +58,7 @@ library
     import:           warnings
 
     -- Modules exported by the library.
-    exposed-modules:  MyLib
+    exposed-modules:  DotFgl
                     , DotLanguage
 
     -- Modules included in this library but not exported.
@@ -72,6 +72,7 @@ library
                     , fgl
                     , text
                     , trifecta
+                    , containers
 
     -- Directories containing source files.
     hs-source-dirs:   src
