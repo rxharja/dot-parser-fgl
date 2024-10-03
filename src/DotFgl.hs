@@ -2,42 +2,42 @@ module DotFgl where
 
 import Data.Graph.Inductive.PatriciaTree ( Gr, Gr )
 import DotLanguage
-import qualified Data.Map as M
 import qualified Data.Graph.Inductive.Graph as G
+import qualified Data.Hashable as Hash
 
+type Nodes = [(Int, NodeId)]
+type Edges = [(Int, Int, [Attribute])]
 type FGLGraph = Gr NodeId [Attribute]
 
 dotGraphToFGL :: DotGraph -> FGLGraph
 dotGraphToFGL (Graph _ _ dot) = G.mkGraph nodes edges
   where
-    (nodes, edges) = collectNodesAndEdges dot M.empty []
+    (nodes, edges) = collectNodesAndEdges dot []
 
-collectNodesAndEdges :: Dot 
-                     -> M.Map NodeId Int 
-                     -> [(Int, Int, [Attribute])] 
-                     -> ([(Int, NodeId)], [(Int, Int, [Attribute])])
-collectNodesAndEdges (Node nodeId _) nodeMap edges =
-  let (_, nodeIdx) = addNode nodeId nodeMap
-  in ([(nodeIdx, nodeId)], edges)
+collectNodesAndEdges :: Dot -> Edges -> (Nodes, Edges)
+collectNodesAndEdges (Node nodeId _) edges =
+  ([(hashNode nodeId, nodeId)], edges)
 
-collectNodesAndEdges (Edge n1 n2 attrs) nodeMap edges =
-  let (nodeMap', nodeIdx1) = addNode n1 nodeMap
-      (_, nodeIdx2) = addNode n2 nodeMap'
+collectNodesAndEdges (Edge n1 n2 attrs) edges =
+  let nodeIdx1 = hashNode n1 
+      nodeIdx2 = hashNode n2 
       newEdge = (nodeIdx1, nodeIdx2, attrs)
-  in ([], newEdge : edges)
+  in ([(nodeIdx1, n1), (nodeIdx2, n2)], newEdge : edges)
 
-collectNodesAndEdges (DotSeq d1 d2) nodeMap edges =
-  let (nodes1, edges1) = collectNodesAndEdges d1 nodeMap edges
-      (nodes2, edges2) = collectNodesAndEdges d2 nodeMap edges1
-  in (nodes1 ++ nodes2, edges2)
+collectNodesAndEdges (DotSeq d1 d2) edges =
+  let (nodes1, edges') = collectNodesAndEdges d1 edges
+      (nodes2, edges'') = collectNodesAndEdges d2 edges'
+  in (nodes1 ++ nodes2, edges'')
 
-collectNodesAndEdges (Subgraph _ dot) nodeMap edges = 
-  collectNodesAndEdges dot nodeMap edges
+collectNodesAndEdges (Subgraph _ dot) edges = 
+  collectNodesAndEdges dot edges
 
-collectNodesAndEdges _ _ edges = ([], edges)
+collectNodesAndEdges (Ranksame dot) edges = 
+  collectNodesAndEdges dot edges
 
-addNode :: NodeId -> M.Map NodeId Int -> (M.Map NodeId Int, Int)
-addNode nodeId nodeMap = case M.lookup nodeId nodeMap of
-  Just idx -> (nodeMap, idx)
-  Nothing  -> let idx = M.size nodeMap in (M.insert nodeId idx nodeMap, idx)
+collectNodesAndEdges _ edges = ([], edges)
+
+hashNode :: NodeId -> Int
+hashNode (Nameless x) = x
+hashNode (UserId name) = Hash.hash name
 

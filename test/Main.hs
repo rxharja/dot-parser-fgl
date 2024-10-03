@@ -107,6 +107,7 @@ main = hspec $ do
     it "Successfully maps the AST to an inductive graph" $ do
        case parseString parseGraph mempty complexInput of
          Success parsed -> do 
+           print parsed
            print $ dotGraphToFGL parsed
            return ()
          Failure e -> do
