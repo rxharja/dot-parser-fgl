@@ -6,6 +6,7 @@ import Text.RawString.QQ (r)
 import Text.Trifecta
 import Test.Hspec
 import DotLanguage
+import DotFgl (dotGraphToFGL)
 
 complexInput :: String
 complexInput = [r|
@@ -101,3 +102,13 @@ main = hspec $ do
        case parseString parseGraph mempty complexInput of
          Success parsed -> parsed `shouldBe` result
          Failure _ -> fail "parsing failed"
+
+  describe "Fgl Map" $ do
+    it "Successfully maps the AST to an inductive graph" $ do
+       case parseString parseGraph mempty complexInput of
+         Success parsed -> do 
+           print $ dotGraphToFGL parsed
+           return ()
+         Failure e -> do
+          print e >> putStrLn "\n"
+          fail "parsing failed"

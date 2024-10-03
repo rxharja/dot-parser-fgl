@@ -1,57 +1,43 @@
-{-# LANGUAGE OverloadedStrings #-}
-
 module DotFgl where
 
-import Data.Graph.Inductive.Graph
-import Data.Graph.Inductive.PatriciaTree (Gr)
-import Data.Graph.Inductive.Query.DFS (dfs)
-import DotLanguage 
+import Data.Graph.Inductive.PatriciaTree ( Gr, Gr )
+import DotLanguage
 import qualified Data.Map as M
-import Data.Text
+import qualified Data.Graph.Inductive.Graph as G
 
--- Define the nodes and edges
-nodes' :: [(Node, String)]
-nodes' = [(1, "A"), (2, "B"), (3, "C"), (4, "D")]
+type FGLGraph = Gr NodeId [Attribute]
 
-edges' :: [(Node, Node, String)]
-edges' = [(1, 2, "A to B"), (2, 3, "B to C"), (3, 4, "C to D"), (4, 1, "D to A")]
-
-fromDotGraph :: DotGraph -> Gr Text Text
-fromDotGraph (Graph _ _ dot) = mkGraph nodes edges
+dotGraphToFGL :: DotGraph -> FGLGraph
+dotGraphToFGL (Graph _ _ dot) = G.mkGraph nodes edges
   where
     (nodes, edges) = collectNodesAndEdges dot M.empty []
 
-collectNodesAndEdges :: Dot -> M.Map NodeId Text 
-                     -> [(Text, Text, [Attribute])] 
-                     -> ([(Text, NodeId)], [(Text, Text, [Attribute])])
-collectNodesAndEdges DotEmpty nodeMap edges = ([], edges)
+collectNodesAndEdges :: Dot 
+                     -> M.Map NodeId Int 
+                     -> [(Int, Int, [Attribute])] 
+                     -> ([(Int, NodeId)], [(Int, Int, [Attribute])])
+collectNodesAndEdges (Node nodeId _) nodeMap edges =
+  let (_, nodeIdx) = addNode nodeId nodeMap
+  in ([(nodeIdx, nodeId)], edges)
 
-fromDot :: DotGraph -> Gr Text Text
-fromDot = undefined
+collectNodesAndEdges (Edge n1 n2 attrs) nodeMap edges =
+  let (nodeMap', nodeIdx1) = addNode n1 nodeMap
+      (_, nodeIdx2) = addNode n2 nodeMap'
+      newEdge = (nodeIdx1, nodeIdx2, attrs)
+  in ([], newEdge : edges)
 
--- Create a graph
-graph :: Gr String String
-graph = mkGraph nodes' edges'
+collectNodesAndEdges (DotSeq d1 d2) nodeMap edges =
+  let (nodes1, edges1) = collectNodesAndEdges d1 nodeMap edges
+      (nodes2, edges2) = collectNodesAndEdges d2 nodeMap edges1
+  in (nodes1 ++ nodes2, edges2)
 
-main :: IO ()
-main = do
-  -- Print the graph
-  putStrLn "Graph nodes:"
-  print (labNodes graph)
+collectNodesAndEdges (Subgraph _ dot) nodeMap edges = 
+  collectNodesAndEdges dot nodeMap edges
 
-  putStrLn "\nGraph edges:"
-  print (labEdges graph)
+collectNodesAndEdges _ _ edges = ([], edges)
 
-  -- Depth-first search starting from node 1
-  putStrLn "\nDFS from node 1:"
-  print (dfs [1] graph)
-
-  -- Check if there's an edge between node 1 and node 2
-  putStrLn "\nIs there an edge from node 1 to node 2?"
-  print (hasEdge graph (1, 2))
-
-  -- Get the context of a node (node 2 in this example)
-  putStrLn "\nContext of node 2:"
-  print (context graph 2)
-  print graph
+addNode :: NodeId -> M.Map NodeId Int -> (M.Map NodeId Int, Int)
+addNode nodeId nodeMap = case M.lookup nodeId nodeMap of
+  Just idx -> (nodeMap, idx)
+  Nothing  -> let idx = M.size nodeMap in (M.insert nodeId idx nodeMap, idx)
 

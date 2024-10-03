@@ -19,7 +19,7 @@ type Attribute = (AttributeName, AttributeValue)
 
 data NodeId = UserId Text
             | Nameless Int
-  deriving (Show, Eq)
+  deriving (Show, Ord, Eq)
 
 data DecType = DecGraph
              | DecNode
@@ -34,15 +34,15 @@ data RankdirType = LR
                  | BT
   deriving (Show, Eq)
 
-data Dot = Node NodeId [Attribute]
-         | Edge NodeId NodeId [Attribute]
+data Dot = Node NodeId [Attribute] -- needed for fgl
+         | Edge NodeId NodeId [Attribute] -- needed for fgl
          | Declaration DecType [Attribute]
          | Attribute Attribute
          | Ranksame Dot
-         | Subgraph Text Dot
+         | Subgraph Text Dot -- traversed for fgl
          | Label Text
          | Rankdir RankdirType
-         | DotSeq Dot Dot
+         | DotSeq Dot Dot -- traversed for fgl
          | DotEmpty
   deriving (Show, Eq)
 
